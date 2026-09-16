@@ -2,10 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Task } from '../types/task';
 import { createTask, getTasksByUser, updateTask, deleteTask } from '../services/taskService';
 import { logoutUser } from '../services/authService';
-import { sendTasksSummaryEmail } from '../services/emailService'; // Importamos el servicio de correo
+import { sendTasksSummaryEmail } from '../services/emailService';
+
+interface UserType {
+  uid: string;
+  email: string | null;
+  [key: string]: unknown;
+}
 
 interface DashboardProps {
-  user: any;
+  user: UserType;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
@@ -13,13 +19,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
-  // Estados para el Extra Credit (Filtros) y carga de correo
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  // Cargar las tareas del usuario al iniciar la pantalla
   const fetchTasks = async () => {
-    if (user) {
+    if (user?.uid) {
       const userTasks = await getTasksByUser(user.uid);
       setTasks(userTasks);
     }
@@ -29,10 +33,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     fetchTasks();
   }, [user]);
 
-  // Manejar la creación de una tarea
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !user?.uid) return;
 
     await createTask(
       {
@@ -46,22 +49,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
     setTitle('');
     setDescription('');
-    fetchTasks(); // Recargar la lista
+    fetchTasks();
   };
 
-  // Cambiar estado de completado
   const handleToggleComplete = async (task: Task) => {
     await updateTask(task.id, { completed: !task.completed });
     fetchTasks();
   };
 
-  // Eliminar tarea
   const handleDelete = async (taskId: string) => {
     await deleteTask(taskId);
     fetchTasks();
   };
 
-  // Manejar el envío de correo con el resumen (AWS SES / Serverless)
   const handleSendEmailSummary = async () => {
     if (!user?.email) {
       alert('No se encontró el email del usuario.');
@@ -71,18 +71,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     try {
       await sendTasksSummaryEmail(user.email, tasks);
       alert('¡Resumen de tareas enviado con éxito!');
-    } catch (error: any) {
-      alert(`Error al enviar el correo: ${error.message}`);
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : 'Error desconocido';
+      alert(`Error al enviar el correo: ${errMessage}`);
     } finally {
       setIsSendingEmail(false);
     }
   };
 
-  // Filtrar tareas según el estado seleccionado (Extra Credit)
   const filteredTasks = tasks.filter((task) => {
     if (filter === 'pending') return !task.completed;
     if (filter === 'completed') return task.completed;
-    return true; // 'all'
+    return true;
   });
 
   return (
@@ -94,9 +94,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </div>
 
-      <p>Conectado como: <strong>{user.email}</strong></p>
+      <p>Conectado como: <strong>{user?.email || 'Sin email'}</strong></p>
 
-      {/* Botón de envío de resumen por email (Requisito AWS SES) */}
       <div style={{ margin: '15px 0' }}>
         <button
           onClick={handleSendEmailSummary}
@@ -107,7 +106,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </div>
 
-      {/* Formulario para nueva tarea */}
       <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#f8f9fa', padding: '15px', borderRadius: '5px', marginTop: '15px' }}>
         <h3>Nueva Tarea</h3>
         <input
@@ -129,7 +127,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </form>
 
-      {/* Filtros de Tareas (Extra Credit) */}
       <div style={{ display: 'flex', gap: '10px', marginTop: '25px', alignItems: 'center' }}>
         <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Filtrar:</span>
         <button
@@ -140,7 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
         <button
           onClick={() => setFilter('pending')}
-          style={{ padding: '6px 12px', background: filter === 'pending' ? '#ffc107' : '#e2e6ea', color: filter === 'pending' ? 'black' : 'black', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+          style={{ padding: '6px 12px', background: filter === 'pending' ? '#ffc107' : '#e2e6ea', color: 'black', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
         >
           Pendientes ({tasks.filter(t => !t.completed).length})
         </button>
@@ -152,7 +149,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </div>
 
-      {/* Listado de tareas */}
       <div style={{ marginTop: '20px' }}>
         {filteredTasks.length === 0 ? (
           <p style={{ color: '#666', fontStyle: 'italic' }}>No hay tareas para mostrar en este filtro.</p>
