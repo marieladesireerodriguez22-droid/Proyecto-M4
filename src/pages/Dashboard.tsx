@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Task } from '../types/task';
 import { createTask, getTasksByUser, updateTask, deleteTask } from '../services/taskService';
 import { logoutUser } from '../services/authService';
+import { sendTasksSummaryEmail } from '../services/emailService'; // Importamos el servicio de correo
 
 interface DashboardProps {
   user: any;
@@ -11,6 +12,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  
+  // Estados para el Extra Credit (Filtros) y carga de correo
+  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Cargar las tareas del usuario al iniciar la pantalla
   const fetchTasks = async () => {
@@ -56,6 +61,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     fetchTasks();
   };
 
+  // Manejar el envío de correo con el resumen (AWS SES / Serverless)
+  const handleSendEmailSummary = async () => {
+    if (!user?.email) {
+      alert('No se encontró el email del usuario.');
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      await sendTasksSummaryEmail(user.email, tasks);
+      alert('¡Resumen de tareas enviado con éxito!');
+    } catch (error: any) {
+      alert(`Error al enviar el correo: ${error.message}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // Filtrar tareas según el estado seleccionado (Extra Credit)
+  const filteredTasks = tasks.filter((task) => {
+    if (filter === 'pending') return !task.completed;
+    if (filter === 'completed') return task.completed;
+    return true; // 'all'
+  });
+
   return (
     <div style={{ maxWidth: '600px', margin: '30px auto', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -67,8 +96,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
       <p>Conectado como: <strong>{user.email}</strong></p>
 
+      {/* Botón de envío de resumen por email (Requisito AWS SES) */}
+      <div style={{ margin: '15px 0' }}>
+        <button
+          onClick={handleSendEmailSummary}
+          disabled={isSendingEmail}
+          style={{ padding: '10px 15px', background: '#007bff', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px', opacity: isSendingEmail ? 0.6 : 1 }}
+        >
+          {isSendingEmail ? 'Enviando resumen...' : '✉️ Enviar resumen por email'}
+        </button>
+      </div>
+
       {/* Formulario para nueva tarea */}
-      <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#f8f9fa', padding: '15px', borderRadius: '5px', marginTop: '20px' }}>
+      <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#f8f9fa', padding: '15px', borderRadius: '5px', marginTop: '15px' }}>
         <h3>Nueva Tarea</h3>
         <input
           type="text"
@@ -89,13 +129,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </form>
 
+      {/* Filtros de Tareas (Extra Credit) */}
+      <div style={{ display: 'flex', gap: '10px', marginTop: '25px', alignItems: 'center' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Filtrar:</span>
+        <button
+          onClick={() => setFilter('all')}
+          style={{ padding: '6px 12px', background: filter === 'all' ? '#6c757d' : '#e2e6ea', color: filter === 'all' ? 'white' : 'black', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+        >
+          Todas ({tasks.length})
+        </button>
+        <button
+          onClick={() => setFilter('pending')}
+          style={{ padding: '6px 12px', background: filter === 'pending' ? '#ffc107' : '#e2e6ea', color: filter === 'pending' ? 'black' : 'black', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+        >
+          Pendientes ({tasks.filter(t => !t.completed).length})
+        </button>
+        <button
+          onClick={() => setFilter('completed')}
+          style={{ padding: '6px 12px', background: filter === 'completed' ? '#28a745' : '#e2e6ea', color: filter === 'completed' ? 'white' : 'black', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+        >
+          Completadas ({tasks.filter(t => t.completed).length})
+        </button>
+      </div>
+
       {/* Listado de tareas */}
-      <div style={{ marginTop: '30px' }}>
-        {tasks.length === 0 ? (
-          <p>No tienes tareas creadas todavía.</p>
+      <div style={{ marginTop: '20px' }}>
+        {filteredTasks.length === 0 ? (
+          <p style={{ color: '#666', fontStyle: 'italic' }}>No hay tareas para mostrar en este filtro.</p>
         ) : (
-          tasks.map((task) => (
-            <div key={task.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #ddd', background: task.completed ? '#e8f5e9' : 'white' }}>
+          filteredTasks.map((task) => (
+            <div key={task.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #ddd', background: task.completed ? '#e8f5e9' : 'white', marginBottom: '8px', borderRadius: '4px' }}>
               <div>
                 <h4 style={{ margin: '0 0 5px 0', textDecoration: task.completed ? 'line-through' : 'none' }}>{task.title}</h4>
                 <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{task.description}</p>
