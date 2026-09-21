@@ -16,6 +16,7 @@ import { Task } from "../types/task";
 
 const COLLECTION_NAME = "tasks";
 
+// Crear una nueva tarea asociada al usuario actual
 export const createTask = async (taskData: Omit<Task, "id" | "createdAt">, userId: string) => {
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...taskData,
@@ -25,6 +26,7 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt">, userI
   return docRef.id;
 };
 
+// Obtener solo las tareas del usuario logueado (consulta única)
 export const getTasksByUser = async (userId: string): Promise<Task[]> => {
   const q = query(collection(db, COLLECTION_NAME), where("userId", "==", userId));
   const querySnapshot = await getDocs(q);
@@ -39,7 +41,7 @@ export const getTasksByUser = async (userId: string): Promise<Task[]> => {
   return tasks;
 };
 
-// Suscripción real-time (Hito 6)
+// Suscripción en tiempo real (vital para cumplir Hito 6 sin recargar la página)
 export const subscribeTasksByUser = (userId: string, callback: (tasks: Task[]) => void): Unsubscribe => {
   const q = query(collection(db, COLLECTION_NAME), where("userId", "==", userId));
   return onSnapshot(q, (querySnapshot) => {
@@ -54,11 +56,13 @@ export const subscribeTasksByUser = (userId: string, callback: (tasks: Task[]) =
   });
 };
 
+// Actualizar una tarea existente
 export const updateTask = async (taskId: string, updatedData: Partial<Task>) => {
   const taskDocRef = doc(db, COLLECTION_NAME, taskId);
   await updateDoc(taskDocRef, updatedData);
 };
 
+// Eliminar una tarea
 export const deleteTask = async (taskId: string) => {
   const taskDocRef = doc(db, COLLECTION_NAME, taskId);
   await deleteDoc(taskDocRef);

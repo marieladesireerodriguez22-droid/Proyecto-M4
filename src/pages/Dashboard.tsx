@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Task } from '../types/task';
-import { createTask, getTasksByUser, updateTask, deleteTask } from '../services/taskService';
+import { createTask, subscribeTasksByUser, updateTask, deleteTask } from '../services/taskService';
 import { logoutUser } from '../services/authService';
 import { sendTasksSummaryEmail } from '../services/emailService';
 
@@ -19,19 +19,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
+  // Estado para edición
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  const fetchTasks = async () => {
-    if (user?.uid) {
-      const userTasks = await getTasksByUser(user.uid);
-      setTasks(userTasks);
-    }
-  };
-
+  // Suscripción en tiempo real con onSnapshot (Hito 6)
   useEffect(() => {
-    fetchTasks();
-  }, [user]);
+    if (!user?.uid) return;
+    const unsubscribe = subscribeTasksByUser(user.uid, (userTasks) => {
+      setTasks(userTasks);
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,17 +52,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
     setTitle('');
     setDescription('');
-    fetchTasks();
   };
 
   const handleToggleComplete = async (task: Task) => {
+    if (!task.id) return;
     await updateTask(task.id, { completed: !task.completed });
-    fetchTasks();
   };
 
-  const handleDelete = async (taskId: string) => {
+  const handleDelete = async (taskId?: string) => {
+    if (!taskId) return;
     await deleteTask(taskId);
-    fetchTasks();
+  };
+
+  const startEditing = (task: Task) => {
+    if (!task.id) return;
+    setEditingId(task.id);
+    setEditTitle(task.title);
+    setEditDescription(task.description);
+  };
+
+  const handleSaveEdit = async (taskId?: string) => {
+    if (!taskId || !editTitle.trim()) return;
+    await updateTask(taskId, {
+      title: editTitle,
+      description: editDescription,
+    });
+    setEditingId(null);
   };
 
   const handleSendEmailSummary = async () => {
@@ -89,7 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     <div style={{ maxWidth: '600px', margin: '30px auto', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Mis Tareas</h2>
-        <button onClick={() => logoutUser()} style={{ padding: '8px 12px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer' }}>
+        <button onClick={() => logoutUser()} style={{ padding: '8px 12px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
           Cerrar Sesión
         </button>
       </div>
@@ -122,12 +140,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           onChange={(e) => setDescription(e.target.value)}
           style={{ padding: '8px' }}
         />
-        <button type="submit" style={{ padding: '10px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer' }}>
+        <button type="submit" style={{ padding: '10px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
           Guardar Tarea
         </button>
       </form>
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '25px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '10px', marginTop: '25px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Filtrar:</span>
         <button
           onClick={() => setFilter('all')}
@@ -154,19 +172,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           <p style={{ color: '#666', fontStyle: 'italic' }}>No hay tareas para mostrar en este filtro.</p>
         ) : (
           filteredTasks.map((task) => (
-            <div key={task.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #ddd', background: task.completed ? '#e8f5e9' : 'white', marginBottom: '8px', borderRadius: '4px' }}>
-              <div>
-                <h4 style={{ margin: '0 0 5px 0', textDecoration: task.completed ? 'line-through' : 'none' }}>{task.title}</h4>
-                <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{task.description}</p>
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => handleToggleComplete(task)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
-                  {task.completed ? 'Desmarcar' : 'Completar'}
-                </button>
-                <button onClick={() => handleDelete(task.id)} style={{ padding: '5px 10px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer' }}>
-                  Eliminar
-                </button>
-              </div>
+            <div key={task.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px', borderBottom: '1px solid #ddd', background: task.completed ? '#e8f5e9' : 'white', marginBottom: '8px', borderRadius: '4px', gap: '8px' }}>
+              {editingId === task.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    style={{ padding: '6px' }}
+                  />
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    style={{ padding: '6px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleSaveEdit(task.id)} style={{ padding: '5px 10px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>Guardar</button>
+                    <button onClick={() => setEditingId(null)} style={{ padding: '5px 10px', background: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 5px 0', textDecoration: task.completed ? 'line-through' : 'none' }}>{task.title}</h4>
+                    <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{task.description}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button onClick={() => handleToggleComplete(task)} style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: '4px' }}>
+                      {task.completed ? 'Desmarcar' : 'Completar'}
+                    </button>
+                    <button onClick={() => startEditing(task)} style={{ padding: '5px 8px', background: '#ffc107', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
+                      Editar
+                    </button>
+                    <button onClick={() => handleDelete(task.id)} style={{ padding: '5px 8px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
