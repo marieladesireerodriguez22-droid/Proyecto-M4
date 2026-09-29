@@ -37,8 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           Data: subject,
         },
       },
-      // Este correo debe estar verificado en tu consola de AWS SES
-      Source: process.env.AWS_SENDER_EMAIL || 'tucorreo@verificado.com', 
+      // Utiliza la variable de entorno configurada en Vercel
+      Source: process.env.SES_FROM_EMAIL || 'mariela.desiree.rodriguez22@gmail.com',
     });
 
     const response = await sesClient.send(command);
