@@ -2,22 +2,19 @@
 
 Aplicación Single Page Application (SPA) para la gestión de tareas de usuarios autenticados, desarrollada con React (Vite/TS), Firebase (Auth & Firestore), AWS SES (vía Serverless Functions en Vercel) y pruebas unitarias con Vitest.
 
----
-
 ## 📋 Descripción del Proyecto
+
 Aplicación orientada a la productividad personal que permite la autenticación de usuarios, gestión completa de tareas (crear, leer, actualizar, completar/desmarcar, eliminar) con sincronización en tiempo real, filtrado por estados y envío de un resumen de tareas por correo electrónico mediante un servicio backend seguro.
 
----
-
 ## 🏛️ Decisiones Arquitectónicas
-* **Arquitectura modular por capas**: Separación clara entre tipos (`src/types`), acceso a datos/servicios (`src/services`), lógica de sesión (`src/hooks`), enrutamiento protegido (`src/routes`) y vistas de UI (`src/pages`).
-* **Unificación de Firebase**: Instancias de `auth` y `db` centralizadas en `src/services/firebase.ts` para evitar múltiples inicializaciones de la aplicación.
-* **Persistencia en tiempo real**: Uso de Firestore con `onSnapshot` (`subscribeTasksByUser`) para reflejar cambios en la interfaz de forma reactiva sin recargar la página.
-* **Backend serverless seguro**: Envío de correos delegado a una Serverless Function de Vercel (`api/send-email.ts`) utilizando `@aws-sdk/client-ses`, manteniendo las credenciales secretas de AWS fuera del bundle del frontend.
 
----
+* **Arquitectura modular por capas:** Separación clara entre tipos (`src/types`), acceso a datos/servicios (`src/services`), lógica de sesión (`src/hooks`), enrutamiento protegido (`src/routes`) y vistas de UI (`src/pages`).
+* **Unificación de Firebase:** Instancias de `auth` y `db` centralizadas en `src/services/firebase.ts` para evitar múltiples inicializaciones de la aplicación.
+* **Persistencia en tiempo real:** Uso de Firestore con `onSnapshot` (`subscribeTasksByUser`) para reflejar cambios en la interfaz de forma reactiva sin recargar la página.
+* **Backend serverless seguro:** Envío de correos delegado a una Serverless Function de Vercel (`api/send-email.ts`) utilizando `@aws-sdk/client-ses`, manteniendo las credenciales secretas de AWS fuera del bundle del frontend.
 
 ## 🚀 Instrucciones de Instalación
+
 1. Clona el repositorio e instala dependencias:
    ```bash
    git clone [https://github.com/marieladesireerodriguez22-droid/Proyecto-M4.git](https://github.com/marieladesireerodriguez22-droid/Proyecto-M4.git)
@@ -41,7 +38,7 @@ VITE_FIREBASE_API_KEY=tu_api_key
 VITE_FIREBASE_AUTH_DOMAIN=tu_auth_domain
 VITE_FIREBASE_PROJECT_ID=tu_project_id
 VITE_FIREBASE_APP_ID=tu_app_id
-(Nota para producción en Vercel: configurar además AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY y AWS_SENDER_EMAIL directamente en el panel de Environment Variables de Vercel sin prefijo VITE_).
+Nota para producción en Vercel: Configurar además AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY y SES_FROM_EMAIL directamente en el panel de Environment Variables de Vercel sin prefijo VITE_.
 
 🌐 URL de Producción
 Despliegue Vercel: https://proyectoint-git-58e9b1-marieladesireerodriguez22-3991s-projects.vercel.app/
@@ -51,7 +48,15 @@ El usuario autenticado hace clic en "✉️ Enviar resumen por email" desde el D
 
 Se invoca sendTasksSummaryEmail(user.email, tasks), la cual realiza una petición POST al endpoint serverless /api/send-email.
 
-La función serverless valida el método HTTP, extrae destinatario y tareas, inicializa el cliente SESClient con las credenciales de entorno de AWS y ejecuta SendEmailCommand.
+Destinatarios del envío: El sistema envía el resumen considerando las direcciones requeridas:
+
+El correo de la persona que se encuentra registrada y logueada en la plataforma (user.email).
+
+Una dirección adicional configurada mediante la variable de entorno correspondiente (SES_FROM_EMAIL).
+
+Nota importante de AWS SES: Para que el envío múltiple o a destinatarios específicos funcione correctamente, ambas direcciones de correo deben estar previamente agregadas y verificadas en la consola de AWS SES (necesario mientras la cuenta se encuentre en modo Sandbox).
+
+La función serverless valida el método HTTP, extrae los destinatarios y las tareas, inicializa el cliente SESClient con las credenciales de entorno de AWS y ejecuta SendEmailCommand.
 
 Devuelve respuesta 200 al cliente confirmando el envío o gestiona errores en caso de fallo.
 
